@@ -1,4 +1,5 @@
 import numpy as np
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import sys
 import numpy.typing as npt
 import pygame
@@ -283,11 +284,13 @@ def animate_cart_pendulum(
     L=2.0, 
     scale=50, 
     arrow_scale=0.1,
-    frame_skip=50
+    frame_skip=50,
+    save_video=True,
+    video_filename="cart_pendulum_simulation.mp4"
 ):
     """
     Animate a cart-pendulum system using pygame, with camera auto-panning
-    AND a scrolling background to visualize motion.
+    and an optional scrolling background. Save animation as a video if needed.
     """
     pygame.init()
 
@@ -314,6 +317,9 @@ def animate_cart_pendulum(
     max_index = len(times) - 1
     run = True
     i = 0
+
+    # List to store frames for video
+    frames = []
 
     while run and i <= max_index:
         for event in pygame.event.get():
@@ -374,12 +380,22 @@ def animate_cart_pendulum(
             pygame.draw.line(screen, BLUE, arrow_start, arrow_end, 5)
 
         pygame.display.flip()
+
+        # Save frame if saving video
+        if save_video:
+            frame = pygame.surfarray.array3d(screen)
+            frame = np.transpose(frame, (1, 0, 2))  # Pygame uses (width, height, channels)
+            frames.append(frame)
+
         i += frame_skip
         clock.tick(60)
 
     pygame.quit()
-    sys.exit()
 
+    # Save video if required
+    if save_video:
+        clip = ImageSequenceClip(frames, fps=60)
+        clip.write_videofile(video_filename, codec="libx264")
 
     
 def main():
@@ -439,8 +455,8 @@ def main():
     ax_.set_xlabel('Time (s)')
     fig1.legend()
     fig1.suptitle('LQR Controller Cart Position: Truth vs. Kalman Estimate')
-    plt.show(block=False)
-    animate_cart_pendulum(times_list, true_measurement, u_list, L)
+    plt.show()
+    # animate_cart_pendulum(times_list, true_measurement, u_list, L)
    
     
 if __name__ == "__main__":

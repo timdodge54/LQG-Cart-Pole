@@ -66,17 +66,6 @@ def dynamics(
         - m * L * Cy * (m * L * state.item(3)**2 * Sy - d * state.item(1))
     ) - m * L * Cy * (1 / (m * L**2 * (M + m * (1 - Cy**2)))) * u
     
-    # x = state.item(0)
-    # x_dot = state.item(1)
-    # theta = state.item(2)
-    # theta_dot = state.item(3)
-    # S = np.sin(theta)
-    # C = np.cos(theta)
-    # D = m_p * L* L * (M+m_p * (1-C**2))
-    # x_ddot = ((1/D)*(-m_p**2*L**2*g*C*S + m_p*L**2*(m_p*L*theta_dot**2*S - d*x_dot)) + m_p*L*L*(1/D)*u)
-    # theta_ddot = ((1/D)*((m_p+M)*m_p*g*L*S - m_p*L*C*(m_p*L*theta_dot**2*S - d*x_dot)) 
-    #               - m_p*L*C*(1/D)*u)
-
     xDot = np.array([xdot, xddot, thetadot, thetaddot])
 
     return xDot

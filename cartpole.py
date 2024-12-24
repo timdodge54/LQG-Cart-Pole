@@ -1,5 +1,7 @@
 import numpy as np
+import sys
 import numpy.typing as npt
+import pygame
 import matplotlib.pyplot as plt
 import control as ctrl
 from typing import Tuple
@@ -27,7 +29,7 @@ class System:
 
 def dynamics(
     state: npt.NDArray[np.float64],
-    m_p: float,
+    m: float,
     M: float,
     L: float,
     g: float,
@@ -48,19 +50,33 @@ def dynamics(
     Returns:
         dynamics xdot
     """
-    
-    x = state.item(0)
-    x_dot = state.item(1)
-    theta = state.item(2)
-    theta_dot = state.item(3)
-    S = np.sin(theta)
-    C = np.cos(theta)
-    D = m_p * L* L * (M+m_p * (1-C**2))
-    x_ddot = ((1/D)*(-m_p**2*L**2*g*C*S + m_p*L**2*(m_p*L*theta_dot**2*S - d*x_dot)) + m_p*L*L*(1/D)*u)
-    theta_ddot = ((1/D)*((m_p+M)*m_p*g*L*S - m_p*L*C*(m_p*L*theta_dot**2*S - d*x_dot)) 
-                  - m_p*L*C*(1/D)*u)
+    Sy = np.sin(state.item(2))
+    Cy = np.cos(state.item(2))
 
-    xDot = np.array([x_dot, x_ddot, theta_dot, theta_ddot])
+    # dx computation
+    xdot = state.item(1)
+    xddot = (1 / (m * L**2 * (M + m * (1 - Cy**2)))) * (
+        -m * m * L**2 * g * Cy * Sy
+        + m * L**2 * (m * L * state.item(3)**2 * Sy - d * state.item(1))
+    ) + m * L**2 * (1 / (m * L**2 * (M + m * (1 - Cy**2)))) * u
+    thetadot = state.item(3)
+    thetaddot = (1 / (m * L**2 * (M + m * (1 - Cy**2)))) * (
+        (m + M) * m * g * L * Sy
+        - m * L * Cy * (m * L * state.item(3)**2 * Sy - d * state.item(1))
+    ) - m * L * Cy * (1 / (m * L**2 * (M + m * (1 - Cy**2)))) * u
+    
+    # x = state.item(0)
+    # x_dot = state.item(1)
+    # theta = state.item(2)
+    # theta_dot = state.item(3)
+    # S = np.sin(theta)
+    # C = np.cos(theta)
+    # D = m_p * L* L * (M+m_p * (1-C**2))
+    # x_ddot = ((1/D)*(-m_p**2*L**2*g*C*S + m_p*L**2*(m_p*L*theta_dot**2*S - d*x_dot)) + m_p*L*L*(1/D)*u)
+    # theta_ddot = ((1/D)*((m_p+M)*m_p*g*L*S - m_p*L*C*(m_p*L*theta_dot**2*S - d*x_dot)) 
+    #               - m_p*L*C*(1/D)*u)
+
+    xDot = np.array([xdot, xddot, thetadot, thetaddot])
 
     return xDot
 
@@ -85,7 +101,7 @@ def get_state_matracies(
     L: float,
     g: float,
     d: float,
-    b: float) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    s: float) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Get linearized dynamics of the system
 
     Args:
@@ -102,16 +118,16 @@ def get_state_matracies(
     
     A = np.array([
         [0, 1, 0, 0],
-        [0, -d/M, b*m_p*g/M, 0],
+        [0, -d/M, -m_p*g/M, 0],
         [0, 0, 0, 1],
-        [0, -b*d/(M*L), -b*(m_p+M)*g/(M*L), 0]
+        [0, -s*d/(M*L), -s*(m_p+M)*g/(M*L), 0]
         ])
 
     B = np.array([
         [0],
         [1/M],
         [0],
-        [b*1/(M*L)]
+        [s*1/(M*L)]
     ])
     C = np.array([[1, 0, 0, 0]])   # shape (1,4)
     return A, B, C
@@ -133,11 +149,11 @@ def simulate_LQG(
     tf = 50
     # zero state init
     state = np.zeros((4,))
-    # state[2]= np.pi - .1
+    state[2]= np.pi - 30*(np.pi/360)
     kal_state = np.zeros((4,))
-    true_measurement = []
+    true_measurement: list[npt.NDArray[np.float64]] = []
     true_measurement.append(state.copy())
-    estimate_vector = []
+    estimate_vector: list[npt.NDArray[np.float64]]= []
     estimate_vector.append(np.zeros(4))
     times_list = [0.]
     u_list = [0.]
@@ -148,7 +164,7 @@ def simulate_LQG(
         t += dt
         times_list.append(t)
         # draw noise and disturbances
-        uDist = np.sqrt(alpha)*np.sqrt(dt)*np.random.randn(4)
+        uDist = np.sqrt(alpha)*np.random.randn(4)
         uNoise = np.sqrt(beta)*np.random.randn()
         # get the dynamics for the system
         xdot = dynamics(state, m_p, M, L, g, d, u)
@@ -167,9 +183,9 @@ def simulate_LQG(
         estimate_vector.append(y_hat.copy())
         # get linearization with 1 unit walk after 10 seconds
         if t < 10:
-            state_diff = y_hat.copy() - np.array([0, 0, np.pi, 0])
+            state_diff = y_hat.copy() - np.array([0, 0, 0, 0])
         else:
-            state_diff = y_hat.copy() - np.array([1, 0, np.pi, 0])
+            state_diff = y_hat.copy() - np.array([1, 0, 0, 0])
         # define control law 
         u = (-K @ state_diff).item()
         u_list.append(u)
@@ -185,15 +201,15 @@ def simulate_estimation(
     d: float, 
     alpha: float,
     beta: float) -> Tuple[list[npt.NDArray[np.float64]], list[npt.NDArray[np.float64]], list[float], list[float]]:
-    dt = .0001
+    dt = .01
     t = 0.
     tf = 50
     # zero state init
-    state = np.zeros((4,))
+    state: npt.NDArray[np.float64]= np.zeros((4,))
     kal_state = np.zeros((4,))
-    true_measurement = []
+    true_measurement: list[np.float64] = []
     true_measurement.append(state.copy())
-    estimate_vector = []
+    estimate_vector: list[np.float64] = []
     estimate_vector.append(np.zeros(4))
     times_list = [0.]
     u_list = [0.]
@@ -230,7 +246,142 @@ def simulate_estimation(
         estimate_vector.append(y_hat)
     return true_measurement, estimate_vector, times_list, u_list
 
+def draw_background(screen, width, height, camera_center, scale):
+    """
+    Draw a ground line and repeated vertical lines ("fence posts")
+    so the user sees motion as the cart moves.
+    """
+    BLACK = (0, 0, 0)
+    GROUND_Y = int(height * 0.75)  # ground line near bottom of screen
+    
+    # Draw the ground line
+    pygame.draw.line(screen, BLACK, (0, GROUND_Y), (width, GROUND_Y), 3)
+    
+    # Fence spacing (in "meters" of world space):
+    fence_spacing = 2.0
+    # We'll draw fences in a horizontal range ~2x screen width around camera
+    x_min = camera_center - (width/scale)
+    x_max = camera_center + (width/scale)
+    
+    # Step through each fence post location in world coordinates
+    x_fence_positions = np.arange(x_min, x_max, fence_spacing)
+    for x_fence in x_fence_positions:
+        # Convert fence's world x to screen x
+        fence_x_screen = int(width//2 + (x_fence - camera_center)*scale)
+        # Draw a simple vertical line from ground up a bit
+        pygame.draw.line(
+            screen, BLACK,
+            (fence_x_screen, GROUND_Y),
+            (fence_x_screen, GROUND_Y - 30),
+            2
+        )
 
+def animate_cart_pendulum(
+    times, 
+    states, 
+    inputs, 
+    L=2.0, 
+    scale=50, 
+    arrow_scale=0.1,
+    frame_skip=50
+):
+    """
+    Animate a cart-pendulum system using pygame, with camera auto-panning
+    AND a scrolling background to visualize motion.
+    """
+    pygame.init()
+
+    width, height = 800, 400
+    screen = pygame.display.set_mode((width, height))
+    pygame.display.set_caption("Cart-Pendulum with Scrolling Background")
+    clock = pygame.time.Clock()
+
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    RED   = (255, 0, 0)
+    BLUE  = (0, 0, 255)
+
+    cart_width  = 80
+    cart_height = 40
+
+    # We'll place the cart's "track" horizontally near the middle
+    origin_y = height // 2
+
+    times  = np.array(times)
+    states = np.array(states)
+    inputs = np.array(inputs)
+
+    max_index = len(times) - 1
+    run = True
+    i = 0
+
+    while run and i <= max_index:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+        
+        screen.fill(WHITE)
+
+        x, x_dot, theta, theta_dot = states[i]
+        u = inputs[i]
+
+        # "Camera center" in world coords. We keep cart near center of screen
+        camera_center = x
+
+        # 1) Draw a background that scrolls based on camera_center
+        draw_background(screen, width, height, camera_center, scale)
+
+        # 2) Now draw the cart-pendulum
+        cart_x_screen = int(width//2 + (x - camera_center)*scale)
+        cart_y_screen = origin_y
+
+        # Draw the cart
+        cart_rect = pygame.Rect(
+            cart_x_screen - cart_width // 2,
+            cart_y_screen - cart_height // 2,
+            cart_width,
+            cart_height
+        )
+        pygame.draw.rect(screen, BLACK, cart_rect)
+
+        # Pivot at top center of the cart
+        pivot_x_screen = cart_x_screen
+        pivot_y_screen = cart_y_screen - cart_height // 2
+
+        # Pendulum
+        pend_length_pixels = L * scale
+        pend_end_x = pivot_x_screen + pend_length_pixels * np.sin(theta)
+        pend_end_y = pivot_y_screen + pend_length_pixels * np.cos(theta)
+
+        pygame.draw.line(
+            screen, RED,
+            (pivot_x_screen, pivot_y_screen),
+            (pend_end_x, pend_end_y),
+            4
+        )
+        pygame.draw.circle(screen, RED, (int(pend_end_x), int(pend_end_y)), 8)
+
+        # 3) Draw the input arrow
+        arrow_len_pixels = int(abs(u) * arrow_scale * scale)
+        if u > 0:
+            arrow_start = (cart_x_screen + cart_width//2, cart_y_screen)
+            arrow_end   = (cart_x_screen + cart_width//2 + arrow_len_pixels, cart_y_screen)
+        else:
+            arrow_start = (cart_x_screen - cart_width//2 - arrow_len_pixels, cart_y_screen)
+            arrow_end   = (cart_x_screen - cart_width//2, cart_y_screen)
+
+        if abs(u) > 1e-3:
+            pygame.draw.line(screen, BLUE, arrow_start, arrow_end, 5)
+
+        pygame.display.flip()
+        i += frame_skip
+        clock.tick(60)
+
+    pygame.quit()
+    sys.exit()
+
+
+    
 def main():
     # parameters 
     m_p = 1
@@ -238,9 +389,9 @@ def main():
     L = 2
     g = -10
     d= 1
-    b = -1 # pend up = 1
+    b = 1 # pend up = 1
     # get state matracies
-    A, B, C = get_state_matracies(m_p, M, L, g, d, b)
+    A, B, C = get_state_matracies(m_p=m_p, M=M, L=L, g=g, d=d, s=b)
     # no input to measurement
     D = np.zeros((C.shape[0], B.shape[1]))
     linSystem = System(A,B,C, D)
@@ -250,8 +401,8 @@ def main():
     rank_obs = ctrl.obsv(A, C)
     print(f"Rank observability matrix {np.linalg.matrix_rank(rank_obs)}")
     # define covariance for disturbances and noise
-    beta = 1
-    alpha = .1
+    beta = .04
+    alpha = .0002
     Vd = np.eye(4)*alpha
     Vn = beta
     # define aggregate system input matracies
@@ -267,8 +418,8 @@ def main():
     KalD = 0*np.hstack((B, Kf))
     kalFilter = System(KalA, KalB, KalC, KalD)
     # define LQR gains
-    Q = np.diag([1, 1, 10, 100])
-    R = .0001
+    Q = np.diag([1, 1, 1, 1])
+    R = .000001
     K, _, _ = ctrl.lqr(A, B, Q, R)
     true_measurement, estimate_vector, times_list, u_list = simulate_LQG(
         linSystem, kalFilter, K, m_p, M, L, g, d, alpha, beta)
@@ -288,7 +439,8 @@ def main():
     ax_.set_xlabel('Time (s)')
     fig1.legend()
     fig1.suptitle('LQR Controller Cart Position: Truth vs. Kalman Estimate')
-    plt.show()
+    plt.show(block=False)
+    animate_cart_pendulum(times_list, true_measurement, u_list, L)
    
     
 if __name__ == "__main__":

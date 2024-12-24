@@ -175,7 +175,7 @@ def simulate_LQG(
         if t < 10:
             state_diff = y_hat.copy() - np.array([0, 0, 0, 0])
         else:
-            state_diff = y_hat.copy() - np.array([1, 0, 0, 0])
+            state_diff = y_hat.copy() - np.array([5, 0, 0, 0])
         # define control law 
         u = (-K @ state_diff).item()
         u_list.append(u)
@@ -274,7 +274,7 @@ def animate_cart_pendulum(
     scale=50, 
     arrow_scale=0.1,
     frame_skip=50,
-    save_video=True,
+    save_video=False,
     video_filename="cart_pendulum_simulation.mp4"
 ):
     """

@@ -62,9 +62,10 @@ The inverted pendulum system is modeled using a nonlinear dynamic equation, line
 
 1. **Convergence Plot**:
    - The `cartpole.png` illustrates the effectiveness of the LQR and LQE in stabilizing the system. True states converge to the desired values, and the Kalman filter's estimates closely match the true states.
-
+![Convergence Plot](./cartpole.png)
 2. **Animation**:
    - The `cartpole.gif` visually demonstrates the cart's smooth movement and the pendulum's stabilization under LQR control.
+![Cart-Pendulum Animation](./cartpole.gif)
 
 ---
 
